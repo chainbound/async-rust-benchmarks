@@ -1,0 +1,55 @@
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+use futures::{StreamExt, stream::FuturesUnordered};
+use tokio::sync::mpsc;
+
+/// A simple actor that implements the [`Future`] trait.
+/// It will receive tasks from a buffered channel and process them in parallel.
+/// The task consists of multiplying a number by 2, with an artificial async delay of 1ms per task.
+///
+/// # Poll order
+/// 1. Continue work in progress
+/// 2. Send finished results on the results channel
+/// 3. Receive new tasks from the incoming channel
+pub struct FutureActor {
+    pub incoming_tasks: mpsc::Receiver<u64>,
+    pub processing_tasks: FuturesUnordered<Pin<Box<dyn Future<Output = u64> + Send>>>,
+    pub results: mpsc::Sender<u64>,
+}
+
+impl Future for FutureActor {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        loop {
+            if let Poll::Ready(Some(result)) = this.processing_tasks.poll_next_unpin(cx) {
+                this.results.try_send(result).unwrap();
+                continue;
+            }
+
+            match this.incoming_tasks.poll_recv(cx) {
+                Poll::Ready(Some(task)) => {
+                    this.processing_tasks.push(Box::pin(async move {
+                        tokio::time::sleep(Duration::from_micros(10)).await;
+                        task * 2
+                    }));
+
+                    continue;
+                }
+                Poll::Ready(None) => {
+                    return Poll::Ready(());
+                }
+                Poll::Pending => {}
+            }
+
+            return Poll::Pending;
+        }
+    }
+}

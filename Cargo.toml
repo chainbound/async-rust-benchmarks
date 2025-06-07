@@ -1,0 +1,15 @@
+[package]
+name = "async-rust-benchmarks"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.45.1", features = ["full"] }
+futures = "0.3.31"
+
+[dev-dependencies]
+criterion = { version = "0.6", features = ["async_tokio"] }
+
+[[bench]]
+name = "01"
+harness = false
