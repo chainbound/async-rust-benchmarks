@@ -24,6 +24,7 @@ graph TD
 The workload is a simple task that multiplies a number by 2 and adds 10 microseconds of delay (in the form of `tokio::time::sleep`).
 
 ## Results
+### Throughput
 ```
      Running benches/01.rs (target/release/deps/01-1b60dc2a7cf15ec8)
 future_actor_50000_tasks_current_thread
@@ -70,3 +71,6 @@ biased_select_actor_50000_tasks_multi_thread
 Found 1 outliers among 100 measurements (1.00%)
   1 (1.00%) high severe
 ```
+
+### Memory Usage
+TODO
