@@ -1,8 +1,6 @@
 # Async Rust Performance Benchmarks
 
-- Benchmarking the performance of async Rust primitives.
-- Use samply
-- Use criterion for both performance and memory usage.
+> Benchmarking the performance of async Rust primitives and patterns.
 
 ## Benchmarks
 | Benchmark | Description | Code |
