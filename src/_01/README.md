@@ -10,15 +10,6 @@ graph TD
     C --> E["Results Channel<br/>(mpsc::Sender)"]
     E --> F["Client Results<br/>(mpsc::Receiver)"]
     
-    subgraph "Actor Processing Loop"
-        C1["1. Poll for completed tasks"] --> C2["2. Send results downstream"]
-        C2 --> C3["3. Receive new tasks"]
-        C3 --> C4["4. Spawn async task<br/>(multiply by 2 + 10μs delay)"]
-        C4 --> C1
-    end
-    
-    C -.-> C1
-    
     style A fill:#e1f5fe
     style F fill:#e8f5e8
     style C fill:#fff3e0
