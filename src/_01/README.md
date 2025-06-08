@@ -1,6 +1,7 @@
 # 01: `Future` implementation vs. `tokio::select!` loop for actors
 
 This benchmark compares the performance of a `Future` implementation vs. a `tokio::select!` loop for long-running actors.
+The basic flow looks like this:
 
 ```mermaid
 graph TD
@@ -15,3 +16,5 @@ graph TD
     style C fill:#fff3e0
     style D fill:#fce4ec
 ```
+
+The workload is a simple task that multiplies a number by 2 and adds 10 microseconds of delay (in the form of `tokio::time::sleep`).
