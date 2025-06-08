@@ -21,7 +21,7 @@ async fn run_future_actor(num_tasks: u64) {
 
     // Run the actor in the background
     // NOTE: This bring perf up to par with the `tokio::select!` loop.
-    let _ = tokio::spawn(tokio::task::unconstrained(actor));
+    let _ = tokio::spawn(actor);
 
     // Send tasks
     for i in 1..=num_tasks {
