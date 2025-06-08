@@ -30,3 +30,6 @@ TODO
 TODO
 ### Memory Usage
 TODO
+
+## Notes
+- Understand why `tokio::unconstrained` on the `FutureActor` is necessary to get the same performance as the `tokio::select!` loop.

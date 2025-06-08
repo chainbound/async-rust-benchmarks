@@ -1,11 +1,12 @@
-use std::{pin::Pin, time::Duration};
-
 use futures::{StreamExt, stream::FuturesUnordered};
+use std::time::Duration;
 use tokio::sync::mpsc;
+
+use super::Task;
 
 pub struct RandomSelectActor {
     pub incoming_tasks: mpsc::Receiver<u64>,
-    pub processing_tasks: FuturesUnordered<Pin<Box<dyn Future<Output = u64> + Send>>>,
+    pub processing_tasks: FuturesUnordered<Task>,
     pub results: mpsc::Sender<u64>,
 }
 
@@ -16,10 +17,7 @@ impl RandomSelectActor {
                 task = self.incoming_tasks.recv() => {
                     match task {
                         Some(task) => {
-                            self.processing_tasks.push(Box::pin(async move {
-                                tokio::time::sleep(Duration::from_micros(10)).await;
-                                task * 2
-                            }));
+                            self.processing_tasks.push(Task::new(task, Duration::from_micros(10)));
                         }
                         None => {
                             return;
@@ -37,7 +35,7 @@ impl RandomSelectActor {
 
 pub struct BiasedSelectActor {
     pub incoming_tasks: mpsc::Receiver<u64>,
-    pub processing_tasks: FuturesUnordered<Pin<Box<dyn Future<Output = u64> + Send>>>,
+    pub processing_tasks: FuturesUnordered<Task>,
     pub results: mpsc::Sender<u64>,
 }
 
@@ -56,10 +54,7 @@ impl BiasedSelectActor {
                 task = self.incoming_tasks.recv() => {
                     match task {
                         Some(task) => {
-                            self.processing_tasks.push(Box::pin(async move {
-                                tokio::time::sleep(Duration::from_micros(10)).await;
-                                task * 2
-                            }));
+                            self.processing_tasks.push(Task::new(task, Duration::from_micros(10)));
                         }
                         None => {
                             return;
