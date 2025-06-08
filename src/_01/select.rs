@@ -45,8 +45,13 @@ impl BiasedSelectActor {
     pub async fn run(mut self) {
         loop {
             tokio::select! {
-                // Interestingly, biasing in this specific order is faster than anything else.
+                // Interestingly, biasing by prioritizing incoming work over processing local work is faster than anything else.
+                // But it would also incur the highest memory usage.
                 biased;
+
+                Some(result) = self.processing_tasks.next() => {
+                    self.results.try_send(result).unwrap();
+                }
 
                 task = self.incoming_tasks.recv() => {
                     match task {
@@ -60,10 +65,6 @@ impl BiasedSelectActor {
                             return;
                         }
                     }
-                }
-
-                Some(result) = self.processing_tasks.next() => {
-                    self.results.try_send(result).unwrap();
                 }
             }
         }
