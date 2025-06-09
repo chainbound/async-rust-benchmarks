@@ -26,6 +26,7 @@ impl Actor for RandomSelectActor {
                 }
 
                 Some(result) = self.processing_tasks.next() => {
+                    // Offset the result by the task duration to get the actual latency.
                     self.results.try_send(Instant::now().duration_since(result) - TASK_DURATION).unwrap();
                 }
             }
@@ -48,6 +49,7 @@ impl Actor for BiasedSelectActor {
                 biased;
 
                 Some(result) = self.processing_tasks.next() => {
+                    // Offset the result by the task duration to get the actual latency.
                     self.results.try_send(Instant::now().duration_since(result) - TASK_DURATION).unwrap();
                 }
 

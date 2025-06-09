@@ -38,6 +38,7 @@ impl Future for FutureActor {
 
         loop {
             if let Poll::Ready(Some(result)) = this.processing_tasks.poll_next_unpin(cx) {
+                // Offset the result by the task duration to get the actual latency.
                 this.results
                     .try_send(Instant::now().duration_since(result) - TASK_DURATION)
                     .unwrap();
