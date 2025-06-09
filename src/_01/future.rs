@@ -8,7 +8,7 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::mpsc;
 
-use super::{TASK_DURATION, Task};
+use super::{Actor, TASK_DURATION, Task};
 
 /// A simple actor that implements the [`Future`] trait.
 /// It will receive tasks from a buffered channel and process them in parallel.
@@ -22,6 +22,12 @@ pub struct FutureActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
     pub results: mpsc::Sender<Duration>,
+}
+
+impl Actor for FutureActor {
+    fn run(self) -> impl Future<Output = ()> + Send + 'static {
+        self
+    }
 }
 
 impl Future for FutureActor {

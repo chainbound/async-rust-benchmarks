@@ -41,3 +41,7 @@ impl Future for Task {
         }
     }
 }
+
+pub trait Actor {
+    fn run(self) -> impl Future<Output = ()> + Send + 'static;
+}

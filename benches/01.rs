@@ -10,6 +10,7 @@ use tokio::{
 };
 
 use async_rust_benchmarks::_01::{
+    Actor,
     future::FutureActor,
     select::{BiasedSelectActor, RandomSelectActor},
 };
@@ -24,16 +25,13 @@ struct Bencher<'a> {
 }
 
 impl<'a> Bencher<'a> {
-    fn benchmark_throughput<F>(
-        mut self,
-        actor: F,
+    fn benchmark_throughput<A: Actor>(
+        &mut self,
+        actor: A,
         num_tasks: usize,
         iters: usize,
-    ) -> ThroughputResult
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        self.rt.spawn(actor);
+    ) -> ThroughputResult {
+        self.rt.spawn(actor.run());
 
         let mut measurements = Vec::with_capacity(iters);
 
@@ -68,6 +66,36 @@ impl<'a> Bencher<'a> {
 
         ThroughputResult { measurements }
     }
+
+    /// This benchmark measures the individual latency of each task, where latency is defined as the time between
+    /// - The task being sent to the actor
+    /// - The task being processed by the actor and queued on the result channel (NOT the last mile result communication)
+    fn benchmark_latency<A: Actor>(
+        &mut self,
+        actor: A,
+        num_tasks: usize,
+        iters: usize,
+    ) -> LatencyResult {
+        self.rt.spawn(actor.run());
+
+        let mut measurements = Vec::with_capacity(iters * num_tasks);
+
+        for _ in 0..iters {
+            let sender = self.task_sender.clone();
+            self.rt.spawn(async move {
+                for _ in 0..num_tasks {
+                    sender.send(Instant::now()).await.unwrap();
+                }
+            });
+
+            for _ in 0..num_tasks {
+                let result = self.rt.block_on(self.result_receiver.recv()).unwrap();
+                measurements.push(result);
+            }
+        }
+
+        LatencyResult { measurements }
+    }
 }
 
 fn main() {
@@ -85,14 +113,14 @@ fn main() {
         results: result_sender,
     };
 
-    let bencher = Bencher {
+    let mut bencher = Bencher {
         rt: &actor_runtime,
         task_sender,
         result_receiver,
     };
 
-    let future_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
-    let future_row = future_result.to_row("FutureActor");
+    let throughput_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
+    let future_row = throughput_result.to_row("FutureActor");
 
     println!(
         "{}",
@@ -108,13 +136,13 @@ fn main() {
         results: result_sender,
     };
 
-    let bencher = Bencher {
+    let mut bencher = Bencher {
         rt: &actor_runtime,
         task_sender,
         result_receiver,
     };
 
-    let random_result = bencher.benchmark_throughput(actor.run(), NUM_TASKS, ITERATIONS);
+    let random_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
     let random_row = random_result.to_row("RandomSelectActor");
 
     println!(
@@ -131,13 +159,13 @@ fn main() {
         results: result_sender,
     };
 
-    let bencher = Bencher {
+    let mut bencher = Bencher {
         rt: &actor_runtime,
         task_sender,
         result_receiver,
     };
 
-    let biased_result = bencher.benchmark_throughput(actor.run(), NUM_TASKS, ITERATIONS);
+    let biased_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
     let biased_row = biased_result.to_row("BiasedSelectActor");
 
     println!(
@@ -148,6 +176,83 @@ fn main() {
     let mut rows = vec![future_row, random_row, biased_row];
 
     rows.sort_by_key(|row| row.mean_duration);
+    let mut table = Table::new(rows);
+    table.modify(Rows::one(1), Color::BOLD);
+
+    println!("{}", table.with(Style::modern()));
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = FutureActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender,
+        result_receiver,
+    };
+
+    let latency_result = bencher.benchmark_latency(actor, NUM_TASKS, ITERATIONS);
+    let future_latency_row = latency_result.to_row("FutureActor");
+
+    println!(
+        "{}",
+        Table::new(vec![future_latency_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = RandomSelectActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender,
+        result_receiver,
+    };
+
+    let latency_result = bencher.benchmark_latency(actor, NUM_TASKS, ITERATIONS);
+    let random_latency_row = latency_result.to_row("RandomSelectActor");
+
+    println!(
+        "{}",
+        Table::new(vec![random_latency_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = BiasedSelectActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender,
+        result_receiver,
+    };
+
+    let latency_result = bencher.benchmark_latency(actor, NUM_TASKS, ITERATIONS);
+    let biased_latency_row = latency_result.to_row("BiasedSelectActor");
+
+    println!(
+        "{}",
+        Table::new(vec![biased_latency_row.clone()]).with(Style::modern())
+    );
+
+    let mut rows = vec![future_latency_row, random_latency_row, biased_latency_row];
+
+    rows.sort_by_key(|row| row.median_latency);
     let mut table = Table::new(rows);
     table.modify(Rows::one(1), Color::BOLD);
 
@@ -173,6 +278,48 @@ impl ThroughputResult {
             min_throughput: self.min_throughput(),
             max_throughput: self.max_throughput(),
         }
+    }
+}
+
+#[derive(Debug)]
+struct LatencyResult {
+    /// Measurements.
+    measurements: Vec<Duration>,
+}
+
+impl LatencyResult {
+    fn to_row(&self, actor_type: &'static str) -> LatencyRow {
+        LatencyRow {
+            actor_type,
+            mean_latency: self.mean_latency(),
+            median_latency: self.quantile(0.5),
+            min_latency: self.min_latency(),
+            p10_latency: self.quantile(0.1),
+            p90_latency: self.quantile(0.9),
+            p99_latency: self.quantile(0.99),
+            max_latency: self.max_latency(),
+        }
+    }
+}
+
+impl LatencyResult {
+    fn mean_latency(&self) -> Duration {
+        self.measurements.iter().sum::<Duration>() / self.measurements.len() as u32
+    }
+
+    fn quantile(&self, quantile: f64) -> Duration {
+        let mut durations = self.measurements.clone();
+        durations.sort();
+        let index = ((durations.len() - 1) as f64 * quantile).round() as usize;
+        durations[index]
+    }
+
+    fn min_latency(&self) -> Duration {
+        *self.measurements.iter().min().unwrap()
+    }
+
+    fn max_latency(&self) -> Duration {
+        *self.measurements.iter().max().unwrap()
     }
 }
 
@@ -218,6 +365,33 @@ struct ThroughputRow {
     /// Max throughput.
     #[tabled(display = "format_throughput")]
     max_throughput: f64,
+}
+
+#[derive(Debug, Tabled, Clone)]
+struct LatencyRow {
+    /// Name of the actor.
+    actor_type: &'static str,
+    /// Mean latency.
+    #[tabled(display = "format_duration")]
+    mean_latency: Duration,
+    /// Median latency.
+    #[tabled(display = "format_duration")]
+    median_latency: Duration,
+    /// Min latency.
+    #[tabled(display = "format_duration")]
+    min_latency: Duration,
+    /// Max latency.
+    #[tabled(display = "format_duration")]
+    max_latency: Duration,
+    /// 10th percentile latency.
+    #[tabled(display = "format_duration")]
+    p10_latency: Duration,
+    /// 90th percentile latency.
+    #[tabled(display = "format_duration")]
+    p90_latency: Duration,
+    /// 99th percentile latency.
+    #[tabled(display = "format_duration")]
+    p99_latency: Duration,
 }
 
 #[derive(Debug)]

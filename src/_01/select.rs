@@ -2,7 +2,7 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-use super::{TASK_DURATION, Task};
+use super::{Actor, TASK_DURATION, Task};
 
 pub struct RandomSelectActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
@@ -10,8 +10,8 @@ pub struct RandomSelectActor {
     pub results: mpsc::Sender<Duration>,
 }
 
-impl RandomSelectActor {
-    pub async fn run(mut self) {
+impl Actor for RandomSelectActor {
+    async fn run(mut self) {
         loop {
             tokio::select! {
                 task = self.incoming_tasks.recv() => {
@@ -39,8 +39,8 @@ pub struct BiasedSelectActor {
     pub results: mpsc::Sender<Duration>,
 }
 
-impl BiasedSelectActor {
-    pub async fn run(mut self) {
+impl Actor for BiasedSelectActor {
+    async fn run(mut self) {
         loop {
             tokio::select! {
                 // Interestingly, biasing by prioritizing incoming work over processing local work is faster than anything else.
