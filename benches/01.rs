@@ -92,6 +92,12 @@ fn main() {
     };
 
     let future_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
+    let future_row = future_result.to_row("FutureActor");
+
+    println!(
+        "{}",
+        Table::new(vec![future_row.clone()]).with(Style::modern())
+    );
 
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
     let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
@@ -109,6 +115,12 @@ fn main() {
     };
 
     let random_result = bencher.benchmark_throughput(actor.run(), NUM_TASKS, ITERATIONS);
+    let random_row = random_result.to_row("RandomSelectActor");
+
+    println!(
+        "{}",
+        Table::new(vec![random_row.clone()]).with(Style::modern())
+    );
 
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
     let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
@@ -126,12 +138,14 @@ fn main() {
     };
 
     let biased_result = bencher.benchmark_throughput(actor.run(), NUM_TASKS, ITERATIONS);
+    let biased_row = biased_result.to_row("BiasedSelectActor");
 
-    let mut rows = vec![
-        future_result.to_row("FutureActor"),
-        random_result.to_row("RandomSelectActor"),
-        biased_result.to_row("BiasedSelectActor"),
-    ];
+    println!(
+        "{}",
+        Table::new(vec![biased_row.clone()]).with(Style::modern())
+    );
+
+    let mut rows = vec![future_row, random_row, biased_row];
 
     rows.sort_by_key(|row| row.mean_duration);
     let mut table = Table::new(rows);
@@ -176,7 +190,7 @@ fn format_throughput(throughput: &f64) -> String {
     }
 }
 
-#[derive(Debug, Tabled)]
+#[derive(Debug, Tabled, Clone)]
 struct ThroughputRow {
     /// Name of the actor.
     actor_type: &'static str,
