@@ -8,7 +8,7 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::mpsc;
 
-use super::Task;
+use super::{TASK_DURATION, Task};
 
 /// A simple actor that implements the [`Future`] trait.
 /// It will receive tasks from a buffered channel and process them in parallel.
@@ -21,7 +21,7 @@ use super::Task;
 pub struct FutureActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<Instant>,
+    pub results: mpsc::Sender<Duration>,
 }
 
 impl Future for FutureActor {
@@ -32,14 +32,15 @@ impl Future for FutureActor {
 
         loop {
             if let Poll::Ready(Some(result)) = this.processing_tasks.poll_next_unpin(cx) {
-                this.results.try_send(result).unwrap();
+                this.results
+                    .try_send(Instant::now().duration_since(result) - TASK_DURATION)
+                    .unwrap();
                 continue;
             }
 
             match this.incoming_tasks.poll_recv(cx) {
                 Poll::Ready(Some(task)) => {
-                    this.processing_tasks
-                        .push(Task::new(task, Duration::from_micros(10)));
+                    this.processing_tasks.push(Task::new(task, TASK_DURATION));
 
                     continue;
                 }

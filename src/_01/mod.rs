@@ -9,6 +9,8 @@ use tokio::time::Sleep;
 pub mod future;
 pub mod select;
 
+const TASK_DURATION: Duration = Duration::from_micros(10);
+
 // We use `pin_project` here because `Sleep` is not `Unpin`. This means that the only way to
 // use it in a `Future` is to put it on the heap with `Box::pin`, which we want to avoid.
 pin_project! {

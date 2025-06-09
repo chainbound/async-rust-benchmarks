@@ -2,12 +2,12 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-use super::Task;
+use super::{TASK_DURATION, Task};
 
 pub struct RandomSelectActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<Instant>,
+    pub results: mpsc::Sender<Duration>,
 }
 
 impl RandomSelectActor {
@@ -17,7 +17,7 @@ impl RandomSelectActor {
                 task = self.incoming_tasks.recv() => {
                     match task {
                         Some(task) => {
-                            self.processing_tasks.push(Task::new(task, Duration::from_micros(10)));
+                            self.processing_tasks.push(Task::new(task, TASK_DURATION));
                         }
                         None => {
                             return;
@@ -26,7 +26,7 @@ impl RandomSelectActor {
                 }
 
                 Some(result) = self.processing_tasks.next() => {
-                    self.results.try_send(result).unwrap();
+                    self.results.try_send(Instant::now().duration_since(result) - TASK_DURATION).unwrap();
                 }
             }
         }
@@ -36,7 +36,7 @@ impl RandomSelectActor {
 pub struct BiasedSelectActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<Instant>,
+    pub results: mpsc::Sender<Duration>,
 }
 
 impl BiasedSelectActor {
@@ -48,13 +48,13 @@ impl BiasedSelectActor {
                 biased;
 
                 Some(result) = self.processing_tasks.next() => {
-                    self.results.try_send(result).unwrap();
+                    self.results.try_send(Instant::now().duration_since(result) - TASK_DURATION).unwrap();
                 }
 
                 task = self.incoming_tasks.recv() => {
                     match task {
                         Some(task) => {
-                            self.processing_tasks.push(Task::new(task, Duration::from_micros(10)));
+                            self.processing_tasks.push(Task::new(task, TASK_DURATION));
                         }
                         None => {
                             return;

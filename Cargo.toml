@@ -14,7 +14,7 @@ futures = "0.3.31"
 pin-project-lite = "0.2"
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["async_tokio"] }
+tabled = "0.20"
 
 [[bench]]
 name = "01"
