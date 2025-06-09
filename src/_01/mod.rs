@@ -2,7 +2,7 @@ use pin_project_lite::pin_project;
 use std::{
     pin::Pin,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::time::Sleep;
 
@@ -15,12 +15,12 @@ pin_project! {
     pub struct Task {
         #[pin]
         sleep: Sleep,
-        value: u64,
+        value: Instant,
     }
 }
 
 impl Task {
-    fn new(value: u64, duration: Duration) -> Self {
+    fn new(value: Instant, duration: Duration) -> Self {
         Self {
             sleep: tokio::time::sleep(duration),
             value,
@@ -29,12 +29,12 @@ impl Task {
 }
 
 impl Future for Task {
-    type Output = u64;
+    type Output = Instant;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
         match this.sleep.poll(cx) {
-            Poll::Ready(()) => Poll::Ready(*this.value * 2),
+            Poll::Ready(()) => Poll::Ready(*this.value),
             Poll::Pending => Poll::Pending,
         }
     }

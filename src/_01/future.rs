@@ -2,7 +2,7 @@ use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -19,9 +19,9 @@ use super::Task;
 /// 2. Send finished results on the results channel
 /// 3. Receive new tasks from the incoming channel
 pub struct FutureActor {
-    pub incoming_tasks: mpsc::Receiver<u64>,
+    pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<u64>,
+    pub results: mpsc::Sender<Instant>,
 }
 
 impl Future for FutureActor {

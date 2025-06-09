@@ -1,13 +1,13 @@
 use futures::{StreamExt, stream::FuturesUnordered};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 use super::Task;
 
 pub struct RandomSelectActor {
-    pub incoming_tasks: mpsc::Receiver<u64>,
+    pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<u64>,
+    pub results: mpsc::Sender<Instant>,
 }
 
 impl RandomSelectActor {
@@ -34,9 +34,9 @@ impl RandomSelectActor {
 }
 
 pub struct BiasedSelectActor {
-    pub incoming_tasks: mpsc::Receiver<u64>,
+    pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
-    pub results: mpsc::Sender<u64>,
+    pub results: mpsc::Sender<Instant>,
 }
 
 impl BiasedSelectActor {

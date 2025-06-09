@@ -1,5 +1,5 @@
 use futures::stream::FuturesUnordered;
-use std::hint::black_box;
+use std::{hint::black_box, time::Instant};
 use tokio::{runtime::Builder, sync::mpsc};
 
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -24,8 +24,8 @@ async fn run_future_actor(num_tasks: u64) {
     let _ = tokio::spawn(actor);
 
     // Send tasks
-    for i in 1..=num_tasks {
-        task_sender.send(i).await.unwrap();
+    for _ in 0..num_tasks {
+        task_sender.send(Instant::now()).await.unwrap();
     }
 
     // Collect results
@@ -53,8 +53,8 @@ async fn run_random_select_actor(num_tasks: u64) {
 
     // Send tasks
     tokio::spawn(async move {
-        for i in 1..=num_tasks {
-            task_sender.send(i).await.unwrap();
+        for _ in 0..num_tasks {
+            task_sender.send(Instant::now()).await.unwrap();
         }
     });
 
@@ -83,8 +83,8 @@ async fn run_biased_select_actor(num_tasks: u64) {
 
     // Send tasks
     tokio::spawn(async move {
-        for i in 1..=num_tasks {
-            task_sender.send(i).await.unwrap();
+        for _ in 0..num_tasks {
+            task_sender.send(Instant::now()).await.unwrap();
         }
     });
 
