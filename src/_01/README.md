@@ -21,11 +21,12 @@ graph TD
     style D fill:#fce4ec
 ```
 
-The workload is a simple task that multiplies a number by 2 and adds 10 microseconds of delay (in the form of `tokio::time::sleep`).
+The workload is a simple task that is initialized with an input (`std::time::Instant`), adds 10 microseconds of delay (in the form of `tokio::time::sleep`), and returns the input. The input is also used to measure the processing latency of each task in the latency benchmark.
 
 ## Results
 - Tasks: 50000
 - Iterations: 100
+- System: Apple M4 Pro, 10 Cores, 16GB RAM
 - Command: `cargo bench 01`
 
 ### Latency
