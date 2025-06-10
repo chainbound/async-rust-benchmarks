@@ -26,7 +26,7 @@ The workload is a simple task that is initialized with an input (`std::time::Ins
 ## Results
 - Tasks: 50000
 - Iterations: 100
-- System: Apple M4 Pro, 10 Cores, 16GB RAM
+- System: Apple M4 Pro, 10 Cores, 32GB RAM
 - Command: `cargo bench 01`
 
 ### Latency
