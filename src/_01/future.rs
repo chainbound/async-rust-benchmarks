@@ -1,12 +1,13 @@
 use std::{
     future::Future,
+    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, Instant},
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::coop::unconstrained};
 
 use super::{Actor, ActorMetrics, TASK_DURATION, Task};
 
@@ -18,20 +19,48 @@ use super::{Actor, ActorMetrics, TASK_DURATION, Task};
 /// 1. Continue work in progress
 /// 2. Send finished results on the results channel
 /// 3. Receive new tasks from the incoming channel
-pub struct FutureActor {
+pub struct FutureActor<T> {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
     pub results: mpsc::Sender<Duration>,
     pub metrics: ActorMetrics,
+    pub _unconstrained: PhantomData<T>,
 }
 
-impl Actor for FutureActor {
+impl<T> FutureActor<T> {
+    pub fn new(incoming_tasks: mpsc::Receiver<Instant>, results: mpsc::Sender<Duration>) -> Self {
+        Self {
+            incoming_tasks,
+            processing_tasks: FuturesUnordered::new(),
+            results,
+            metrics: ActorMetrics::new(),
+            _unconstrained: PhantomData,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Constrained;
+
+#[derive(Default)]
+pub struct Unconstrained;
+
+impl Actor for FutureActor<Constrained> {
     fn run(self) -> impl Future<Output = ActorMetrics> + Send + 'static {
         self
     }
 }
 
-impl Future for FutureActor {
+impl Actor for FutureActor<Unconstrained> {
+    fn run(self) -> impl Future<Output = ActorMetrics> + Send + 'static {
+        unconstrained(self)
+    }
+}
+
+impl<T> Future for FutureActor<T>
+where
+    T: Unpin,
+{
     type Output = ActorMetrics;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

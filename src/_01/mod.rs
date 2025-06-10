@@ -42,7 +42,7 @@ impl Future for Task {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ActorMetrics {
     max_pending_tasks: usize,
 }

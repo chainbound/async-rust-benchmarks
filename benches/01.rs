@@ -12,7 +12,7 @@ use tokio_metrics::TaskMetrics;
 
 use async_rust_benchmarks::_01::{
     Actor, ActorMetrics,
-    future::FutureActor,
+    future::{Constrained, FutureActor, Unconstrained},
     select::{BiasedSelectActor, RandomSelectActor},
 };
 
@@ -146,12 +146,7 @@ fn main() {
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
     let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
 
-    let actor = FutureActor {
-        incoming_tasks: task_receiver,
-        processing_tasks: FuturesUnordered::new(),
-        results: result_sender,
-        metrics: ActorMetrics::new(),
-    };
+    let actor = FutureActor::<Constrained>::new(task_receiver, result_sender);
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
@@ -165,6 +160,25 @@ fn main() {
     println!(
         "{}",
         Table::new(vec![future_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = FutureActor::<Unconstrained>::new(task_receiver, result_sender);
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let throughput_result = bencher.benchmark_throughput(actor, NUM_TASKS, ITERATIONS);
+    let unconstrained_throughput_row = throughput_result.to_row("FutureActorUnconstrained");
+
+    println!(
+        "{}",
+        Table::new(vec![unconstrained_throughput_row.clone()]).with(Style::modern())
     );
 
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
@@ -215,7 +229,12 @@ fn main() {
         Table::new(vec![biased_row.clone()]).with(Style::modern())
     );
 
-    let mut rows = vec![future_row, random_row, biased_row];
+    let mut rows = vec![
+        future_row,
+        unconstrained_throughput_row,
+        random_row,
+        biased_row,
+    ];
 
     rows.sort_by_key(|row| row.mean_duration);
     let mut table = Table::new(rows);
@@ -226,12 +245,7 @@ fn main() {
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
     let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
 
-    let actor = FutureActor {
-        incoming_tasks: task_receiver,
-        processing_tasks: FuturesUnordered::new(),
-        results: result_sender,
-        metrics: ActorMetrics::new(),
-    };
+    let actor = FutureActor::<Constrained>::new(task_receiver, result_sender);
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
@@ -245,6 +259,25 @@ fn main() {
     println!(
         "{}",
         Table::new(vec![future_latency_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = FutureActor::<Unconstrained>::new(task_receiver, result_sender);
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let latency_result = bencher.benchmark_latency(actor, NUM_TASKS, ITERATIONS);
+    let unconstrained_latency_row = latency_result.to_row("FutureActorUnconstrained");
+
+    println!(
+        "{}",
+        Table::new(vec![unconstrained_latency_row.clone()]).with(Style::modern())
     );
 
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
@@ -295,7 +328,12 @@ fn main() {
         Table::new(vec![biased_latency_row.clone()]).with(Style::modern())
     );
 
-    let mut rows = vec![future_latency_row, random_latency_row, biased_latency_row];
+    let mut rows = vec![
+        future_latency_row,
+        unconstrained_latency_row,
+        random_latency_row,
+        biased_latency_row,
+    ];
 
     rows.sort_by_key(|row| row.median_latency);
     let mut table = Table::new(rows);
@@ -306,12 +344,7 @@ fn main() {
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
     let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
 
-    let actor = FutureActor {
-        incoming_tasks: task_receiver,
-        processing_tasks: FuturesUnordered::new(),
-        results: result_sender,
-        metrics: ActorMetrics::new(),
-    };
+    let actor = FutureActor::<Constrained>::new(task_receiver, result_sender);
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
@@ -325,6 +358,25 @@ fn main() {
     println!(
         "{}",
         Table::new(vec![future_load_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = FutureActor::<Unconstrained>::new(task_receiver, result_sender);
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let unconstrained_load_metrics = bencher.benchmark_load(actor, NUM_TASKS, ITERATIONS);
+    let unconstrained_load_row = unconstrained_load_metrics.to_row("FutureActorUnconstrained");
+
+    println!(
+        "{}",
+        Table::new(vec![unconstrained_load_row.clone()]).with(Style::modern())
     );
 
     let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
@@ -375,7 +427,12 @@ fn main() {
         Table::new(vec![biased_load_row.clone()]).with(Style::modern())
     );
 
-    let mut rows = vec![future_load_row, random_load_row, biased_load_row];
+    let mut rows = vec![
+        future_load_row,
+        unconstrained_load_row,
+        random_load_row,
+        biased_load_row,
+    ];
     rows.sort_by_key(|row| row.total_poll_duration);
     let mut table = Table::new(rows);
     table.modify(Rows::one(1), Color::BOLD);
