@@ -24,6 +24,10 @@ graph TD
 The workload is a simple task that multiplies a number by 2 and adds 10 microseconds of delay (in the form of `tokio::time::sleep`).
 
 ## Results
+- Tasks: 50000
+- Iterations: 100
+- Command: `cargo bench 01`
+
 ### Latency
 ```
 ┌───────────────────┬──────────────┬────────────────┬─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐

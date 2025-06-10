@@ -8,7 +8,7 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::mpsc;
 
-use super::{Actor, TASK_DURATION, Task};
+use super::{Actor, ActorMetrics, TASK_DURATION, Task};
 
 /// A simple actor that implements the [`Future`] trait.
 /// It will receive tasks from a buffered channel and process them in parallel.
@@ -22,16 +22,17 @@ pub struct FutureActor {
     pub incoming_tasks: mpsc::Receiver<Instant>,
     pub processing_tasks: FuturesUnordered<Task>,
     pub results: mpsc::Sender<Duration>,
+    pub metrics: ActorMetrics,
 }
 
 impl Actor for FutureActor {
-    fn run(self) -> impl Future<Output = ()> + Send + 'static {
+    fn run(self) -> impl Future<Output = ActorMetrics> + Send + 'static {
         self
     }
 }
 
 impl Future for FutureActor {
-    type Output = ();
+    type Output = ActorMetrics;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
@@ -42,17 +43,22 @@ impl Future for FutureActor {
                 this.results
                     .try_send(Instant::now().duration_since(result) - TASK_DURATION)
                     .unwrap();
+
                 continue;
             }
 
             match this.incoming_tasks.poll_recv(cx) {
                 Poll::Ready(Some(task)) => {
                     this.processing_tasks.push(Task::new(task, TASK_DURATION));
+                    this.metrics.max_pending_tasks = this
+                        .processing_tasks
+                        .len()
+                        .max(this.metrics.max_pending_tasks);
 
                     continue;
                 }
                 Poll::Ready(None) => {
-                    return Poll::Ready(());
+                    return Poll::Ready(this.metrics.clone());
                 }
                 Poll::Pending => {}
             }

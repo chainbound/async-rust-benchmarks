@@ -42,6 +42,23 @@ impl Future for Task {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ActorMetrics {
+    max_pending_tasks: usize,
+}
+
+impl ActorMetrics {
+    pub fn new() -> Self {
+        Self {
+            max_pending_tasks: 0,
+        }
+    }
+
+    pub fn max_pending_tasks(&self) -> usize {
+        self.max_pending_tasks
+    }
+}
+
 pub trait Actor {
-    fn run(self) -> impl Future<Output = ()> + Send + 'static;
+    fn run(self) -> impl Future<Output = ActorMetrics> + Send + 'static;
 }

@@ -10,7 +10,7 @@ use tokio::{
 };
 
 use async_rust_benchmarks::_01::{
-    Actor,
+    Actor, ActorMetrics,
     future::FutureActor,
     select::{BiasedSelectActor, RandomSelectActor},
 };
@@ -19,7 +19,7 @@ struct Bencher<'a> {
     /// The runtime that runs the actor.
     rt: &'a Runtime,
     /// The sender that sends tasks to the actor.
-    task_sender: mpsc::Sender<Instant>,
+    task_sender: Option<mpsc::Sender<Instant>>,
     /// The receiver that receives results from the actor.
     result_receiver: mpsc::Receiver<Duration>,
 }
@@ -31,12 +31,15 @@ impl<'a> Bencher<'a> {
         num_tasks: usize,
         iters: usize,
     ) -> ThroughputResult {
-        self.rt.spawn(actor.run());
+        let handle = self.rt.spawn(actor.run());
+
+        // Take the sender
+        let task_sender = self.task_sender.take().unwrap();
 
         let mut measurements = Vec::with_capacity(iters);
 
         for _ in 0..iters {
-            let sender = self.task_sender.clone();
+            let sender = task_sender.clone();
             let start = self.rt.spawn(async move {
                 // Start here, don't want to measure the `spawn` duration.
                 let start = Instant::now();
@@ -64,7 +67,13 @@ impl<'a> Bencher<'a> {
             });
         }
 
-        ThroughputResult { measurements }
+        drop(task_sender);
+        let metrics = self.rt.block_on(handle).unwrap();
+
+        ThroughputResult {
+            measurements,
+            metrics,
+        }
     }
 
     /// This benchmark measures the individual latency of each task, where latency is defined as the time between
@@ -77,11 +86,12 @@ impl<'a> Bencher<'a> {
         iters: usize,
     ) -> LatencyResult {
         self.rt.spawn(actor.run());
+        let task_sender = self.task_sender.take().unwrap();
 
         let mut measurements = Vec::with_capacity(iters * num_tasks);
 
         for _ in 0..iters {
-            let sender = self.task_sender.clone();
+            let sender = task_sender.clone();
             self.rt.spawn(async move {
                 for _ in 0..num_tasks {
                     sender.send(Instant::now()).await.unwrap();
@@ -111,11 +121,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -134,11 +145,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -157,11 +169,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -188,11 +201,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -211,11 +225,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -234,11 +249,12 @@ fn main() {
         incoming_tasks: task_receiver,
         processing_tasks: FuturesUnordered::new(),
         results: result_sender,
+        metrics: ActorMetrics::new(),
     };
 
     let mut bencher = Bencher {
         rt: &actor_runtime,
-        task_sender,
+        task_sender: Some(task_sender),
         result_receiver,
     };
 
@@ -263,6 +279,8 @@ fn main() {
 struct ThroughputResult {
     /// Measurements.
     measurements: Vec<ThroughputMeasurement>,
+    /// Metrics.
+    metrics: ActorMetrics,
 }
 
 impl ThroughputResult {
@@ -277,6 +295,7 @@ impl ThroughputResult {
             max_duration: self.max_duration(),
             min_throughput: self.min_throughput(),
             max_throughput: self.max_throughput(),
+            max_pending_tasks: self.metrics.max_pending_tasks(),
         }
     }
 }
@@ -365,6 +384,8 @@ struct ThroughputRow {
     /// Max throughput.
     #[tabled(display = "format_throughput")]
     max_throughput: f64,
+    /// Max pending tasks.
+    max_pending_tasks: usize,
 }
 
 #[derive(Debug, Tabled, Clone)]
