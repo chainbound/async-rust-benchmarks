@@ -8,6 +8,7 @@ use tokio::{
     runtime::{Builder, Runtime},
     sync::mpsc,
 };
+use tokio_metrics::TaskMetrics;
 
 use async_rust_benchmarks::_01::{
     Actor, ActorMetrics,
@@ -105,6 +106,34 @@ impl<'a> Bencher<'a> {
         }
 
         LatencyResult { measurements }
+    }
+
+    fn benchmark_load<A: Actor>(
+        &mut self,
+        actor: A,
+        num_tasks: usize,
+        iters: usize,
+    ) -> TaskMetrics {
+        let monitor = tokio_metrics::TaskMonitor::new();
+        let task_monitor = monitor.clone();
+        self.rt.spawn(task_monitor.instrument(actor.run()));
+
+        let task_sender = self.task_sender.take().unwrap();
+
+        for _ in 0..iters {
+            let sender = task_sender.clone();
+            self.rt.spawn(async move {
+                for _ in 0..num_tasks {
+                    sender.send(Instant::now()).await.unwrap();
+                }
+            });
+
+            for _ in 0..num_tasks {
+                let _ = self.rt.block_on(self.result_receiver.recv()).unwrap();
+            }
+        }
+
+        monitor.cumulative()
     }
 }
 
@@ -273,6 +302,85 @@ fn main() {
     table.modify(Rows::one(1), Color::BOLD);
 
     println!("{}", table.with(Style::modern()));
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = FutureActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+        metrics: ActorMetrics::new(),
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let future_load_metrics = bencher.benchmark_load(actor, NUM_TASKS, ITERATIONS);
+    let future_load_row = future_load_metrics.to_row("FutureActor");
+
+    println!(
+        "{}",
+        Table::new(vec![future_load_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = RandomSelectActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+        metrics: ActorMetrics::new(),
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let random_load_metrics = bencher.benchmark_load(actor, NUM_TASKS, ITERATIONS);
+    let random_load_row = random_load_metrics.to_row("RandomSelectActor");
+
+    println!(
+        "{}",
+        Table::new(vec![random_load_row.clone()]).with(Style::modern())
+    );
+
+    let (task_sender, task_receiver) = mpsc::channel(NUM_TASKS);
+    let (result_sender, result_receiver) = mpsc::channel(NUM_TASKS);
+
+    let actor = BiasedSelectActor {
+        incoming_tasks: task_receiver,
+        processing_tasks: FuturesUnordered::new(),
+        results: result_sender,
+        metrics: ActorMetrics::new(),
+    };
+
+    let mut bencher = Bencher {
+        rt: &actor_runtime,
+        task_sender: Some(task_sender),
+        result_receiver,
+    };
+
+    let biased_load_metrics = bencher.benchmark_load(actor, NUM_TASKS, ITERATIONS);
+    let biased_load_row = biased_load_metrics.to_row("BiasedSelectActor");
+
+    println!(
+        "{}",
+        Table::new(vec![biased_load_row.clone()]).with(Style::modern())
+    );
+
+    let mut rows = vec![future_load_row, random_load_row, biased_load_row];
+    rows.sort_by_key(|row| row.total_poll_duration);
+    let mut table = Table::new(rows);
+    table.modify(Rows::one(1), Color::BOLD);
+
+    println!("{}", table.with(Style::modern()));
 }
 
 #[derive(Debug)]
@@ -283,7 +391,9 @@ struct ThroughputResult {
     metrics: ActorMetrics,
 }
 
-impl ThroughputResult {
+impl ToRow for ThroughputResult {
+    type Row = ThroughputRow;
+
     fn to_row(&self, actor_type: &'static str) -> ThroughputRow {
         ThroughputRow {
             actor_type,
@@ -306,7 +416,14 @@ struct LatencyResult {
     measurements: Vec<Duration>,
 }
 
-impl LatencyResult {
+trait ToRow {
+    type Row;
+
+    fn to_row(&self, actor_type: &'static str) -> Self::Row;
+}
+
+impl ToRow for LatencyResult {
+    type Row = LatencyRow;
     fn to_row(&self, actor_type: &'static str) -> LatencyRow {
         LatencyRow {
             actor_type,
@@ -478,5 +595,59 @@ impl ThroughputResult {
             .map(|m| m.throughput)
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
+    }
+}
+
+/// total_first_poll_delay: 4.458µs, total_idled_count: 81098, total_idle_duration: 118.995521ms, total_scheduled_count: 81254, total_scheduled_duration: 445.920249ms, total_poll_count: 81255, total_poll_duration: 664.486095ms, total_fast_poll_count: 81060, total_fast_poll_duration: 648.101215ms, total_slow_poll_count: 195, total_slow_poll_duration: 16.38488ms, total_short_delay_count: 81066, total_long_delay_count: 188, total_short_delay_duration: 433.300211ms, total_long_delay_duration: 12.620038ms }
+#[derive(Debug, Tabled, Clone)]
+struct LoadRow {
+    actor_type: &'static str,
+    #[tabled(display = "format_duration")]
+    total_first_poll_delay: Duration,
+    total_idled_count: u64,
+    #[tabled(display = "format_duration")]
+    total_idle_duration: Duration,
+    total_scheduled_count: u64,
+    #[tabled(display = "format_duration")]
+    total_scheduled_duration: Duration,
+    total_poll_count: u64,
+    #[tabled(display = "format_duration")]
+    total_poll_duration: Duration,
+    total_fast_poll_count: u64,
+    #[tabled(display = "format_duration")]
+    total_fast_poll_duration: Duration,
+    total_slow_poll_count: u64,
+    #[tabled(display = "format_duration")]
+    total_slow_poll_duration: Duration,
+    total_short_delay_count: u64,
+    total_long_delay_count: u64,
+    #[tabled(display = "format_duration")]
+    total_short_delay_duration: Duration,
+    #[tabled(display = "format_duration")]
+    total_long_delay_duration: Duration,
+}
+
+impl ToRow for TaskMetrics {
+    type Row = LoadRow;
+
+    fn to_row(&self, actor_type: &'static str) -> LoadRow {
+        LoadRow {
+            actor_type,
+            total_first_poll_delay: self.total_first_poll_delay,
+            total_idled_count: self.total_idled_count,
+            total_idle_duration: self.total_idle_duration,
+            total_scheduled_count: self.total_scheduled_count,
+            total_scheduled_duration: self.total_scheduled_duration,
+            total_poll_count: self.total_poll_count,
+            total_poll_duration: self.total_poll_duration,
+            total_fast_poll_count: self.total_fast_poll_count,
+            total_fast_poll_duration: self.total_fast_poll_duration,
+            total_slow_poll_count: self.total_slow_poll_count,
+            total_slow_poll_duration: self.total_slow_poll_duration,
+            total_short_delay_count: self.total_short_delay_count,
+            total_long_delay_count: self.total_long_delay_count,
+            total_short_delay_duration: self.total_short_delay_duration,
+            total_long_delay_duration: self.total_long_delay_duration,
+        }
     }
 }
