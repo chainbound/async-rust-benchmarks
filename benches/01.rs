@@ -433,7 +433,7 @@ fn main() {
         random_load_row,
         biased_load_row,
     ];
-    rows.sort_by_key(|row| row.load);
+    rows.sort_by(|a, b| a.load.partial_cmp(&b.load).unwrap());
     let mut table = Table::new(rows);
     table.modify(Rows::one(1), Color::BOLD);
 
@@ -677,14 +677,21 @@ struct LoadRow {
     mean_slow_poll_duration: Duration,
     #[tabled(display = "format_percentage")]
     slow_poll_ratio: f64,
-    load: u64,
+    #[tabled(display = "format_percentage")]
+    load: f64,
 }
 
-fn calculate_load(metrics: &TaskMetrics) -> u64 {
-    let total_time = metrics.mean_poll_duration()
-        + metrics.mean_idle_duration()
-        + metrics.mean_scheduled_duration();
-    (metrics.mean_poll_duration().as_secs_f64() / total_time.as_secs_f64() * 100.0).round() as u64
+fn calculate_load(metrics: &TaskMetrics) -> f64 {
+    // Calculate load as percentage of time spent actively working vs total runtime
+    let total_work_time = metrics.total_poll_duration;
+    let total_runtime = metrics.total_poll_duration + metrics.total_idle_duration;
+
+    if total_runtime.as_nanos() == 0 {
+        return 0.0;
+    }
+
+    // Load percentage: 100% = fully utilized, 0% = completely idle
+    total_work_time.as_secs_f64() / total_runtime.as_secs_f64()
 }
 
 impl ToRow for TaskMetrics {
