@@ -659,8 +659,6 @@ impl ThroughputResult {
 #[derive(Debug, Tabled, Clone)]
 struct LoadRow {
     actor_type: &'static str,
-    #[tabled(display = "format_duration")]
-    total_first_poll_delay: Duration,
     total_idled_count: u64,
     #[tabled(display = "format_duration")]
     total_idle_duration: Duration,
@@ -690,7 +688,6 @@ impl ToRow for TaskMetrics {
     fn to_row(&self, actor_type: &'static str) -> LoadRow {
         LoadRow {
             actor_type,
-            total_first_poll_delay: self.total_first_poll_delay,
             total_idled_count: self.total_idled_count,
             total_idle_duration: self.total_idle_duration,
             total_scheduled_count: self.total_scheduled_count,
