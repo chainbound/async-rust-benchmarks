@@ -662,6 +662,8 @@ impl ThroughputResult {
 #[derive(Debug, Tabled, Clone)]
 struct LoadRow {
     actor_type: &'static str,
+    #[tabled(display = "format_percentage")]
+    load: f64,
     total_poll_count: u64,
     total_fast_poll_count: u64,
     total_slow_poll_count: u64,
@@ -677,8 +679,6 @@ struct LoadRow {
     mean_slow_poll_duration: Duration,
     #[tabled(display = "format_percentage")]
     slow_poll_ratio: f64,
-    #[tabled(display = "format_percentage")]
-    load: f64,
 }
 
 fn calculate_load(metrics: &TaskMetrics) -> f64 {
