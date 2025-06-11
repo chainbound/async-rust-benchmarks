@@ -684,7 +684,9 @@ struct LoadRow {
 fn calculate_load(metrics: &TaskMetrics) -> f64 {
     // Calculate load as percentage of time spent actively working vs total runtime
     let total_work_time = metrics.total_poll_duration;
-    let total_runtime = metrics.total_poll_duration + metrics.total_idle_duration;
+    let total_runtime = metrics.total_poll_duration
+        + metrics.total_idle_duration
+        + metrics.total_scheduled_duration;
 
     if total_runtime.as_nanos() == 0 {
         return 0.0;
