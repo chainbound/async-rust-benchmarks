@@ -433,7 +433,7 @@ fn main() {
         random_load_row,
         biased_load_row,
     ];
-    rows.sort_by_key(|row| row.total_poll_duration);
+    rows.sort_by_key(|row| row.load);
     let mut table = Table::new(rows);
     table.modify(Rows::one(1), Color::BOLD);
 
@@ -528,6 +528,10 @@ fn format_throughput(throughput: &f64) -> String {
     } else {
         format!("{:.3}", throughput)
     }
+}
+
+fn format_percentage(percentage: &f64) -> String {
+    format!("{:.2}%", percentage * 100.0)
 }
 
 #[derive(Debug, Tabled, Clone)]
@@ -655,31 +659,32 @@ impl ThroughputResult {
     }
 }
 
-/// total_first_poll_delay: 4.458µs, total_idled_count: 81098, total_idle_duration: 118.995521ms, total_scheduled_count: 81254, total_scheduled_duration: 445.920249ms, total_poll_count: 81255, total_poll_duration: 664.486095ms, total_fast_poll_count: 81060, total_fast_poll_duration: 648.101215ms, total_slow_poll_count: 195, total_slow_poll_duration: 16.38488ms, total_short_delay_count: 81066, total_long_delay_count: 188, total_short_delay_duration: 433.300211ms, total_long_delay_duration: 12.620038ms }
 #[derive(Debug, Tabled, Clone)]
 struct LoadRow {
     actor_type: &'static str,
-    total_idled_count: u64,
-    #[tabled(display = "format_duration")]
-    total_idle_duration: Duration,
-    total_scheduled_count: u64,
-    #[tabled(display = "format_duration")]
-    total_scheduled_duration: Duration,
     total_poll_count: u64,
-    #[tabled(display = "format_duration")]
-    total_poll_duration: Duration,
     total_fast_poll_count: u64,
-    #[tabled(display = "format_duration")]
-    total_fast_poll_duration: Duration,
     total_slow_poll_count: u64,
     #[tabled(display = "format_duration")]
-    total_slow_poll_duration: Duration,
-    total_short_delay_count: u64,
-    total_long_delay_count: u64,
+    mean_idle_duration: Duration,
     #[tabled(display = "format_duration")]
-    total_short_delay_duration: Duration,
+    mean_scheduled_duration: Duration,
     #[tabled(display = "format_duration")]
-    total_long_delay_duration: Duration,
+    mean_poll_duration: Duration,
+    #[tabled(display = "format_duration")]
+    mean_fast_poll_duration: Duration,
+    #[tabled(display = "format_duration")]
+    mean_slow_poll_duration: Duration,
+    #[tabled(display = "format_percentage")]
+    slow_poll_ratio: f64,
+    load: u64,
+}
+
+fn calculate_load(metrics: &TaskMetrics) -> u64 {
+    let total_time = metrics.mean_poll_duration()
+        + metrics.mean_idle_duration()
+        + metrics.mean_scheduled_duration();
+    (metrics.mean_poll_duration().as_secs_f64() / total_time.as_secs_f64() * 100.0).round() as u64
 }
 
 impl ToRow for TaskMetrics {
@@ -688,20 +693,16 @@ impl ToRow for TaskMetrics {
     fn to_row(&self, actor_type: &'static str) -> LoadRow {
         LoadRow {
             actor_type,
-            total_idled_count: self.total_idled_count,
-            total_idle_duration: self.total_idle_duration,
-            total_scheduled_count: self.total_scheduled_count,
-            total_scheduled_duration: self.total_scheduled_duration,
             total_poll_count: self.total_poll_count,
-            total_poll_duration: self.total_poll_duration,
             total_fast_poll_count: self.total_fast_poll_count,
-            total_fast_poll_duration: self.total_fast_poll_duration,
             total_slow_poll_count: self.total_slow_poll_count,
-            total_slow_poll_duration: self.total_slow_poll_duration,
-            total_short_delay_count: self.total_short_delay_count,
-            total_long_delay_count: self.total_long_delay_count,
-            total_short_delay_duration: self.total_short_delay_duration,
-            total_long_delay_duration: self.total_long_delay_duration,
+            mean_idle_duration: self.mean_idle_duration(),
+            mean_scheduled_duration: self.mean_scheduled_duration(),
+            mean_poll_duration: self.mean_poll_duration(),
+            mean_fast_poll_duration: self.mean_fast_poll_duration(),
+            mean_slow_poll_duration: self.mean_slow_poll_duration(),
+            slow_poll_ratio: self.slow_poll_ratio(),
+            load: calculate_load(self),
         }
     }
 }
